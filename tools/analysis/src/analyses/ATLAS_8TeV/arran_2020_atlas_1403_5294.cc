@@ -15,9 +15,10 @@ void Arran_2020_atlas_1403_5294::initialize() {
 
 void Arran_2020_atlas_1403_5294::analyze() {
 
+  missingET->addMuons(muonsCombined);  // Adds muons to missing ET. This should almost always be done which is why this line is not commented out.
+
 //Signal electrons fit the 'tight' criteria (defined in paper)
 //Electrons with pT>10 GeV, |eta|<2.47 (defined in paper)
-  electronsLoose = filterPhaseSpace(electronsLoose, 10., -2.47, 2.47);
   electronsTight = filterPhaseSpace(electronsTight, 10., -2.47, 2.47);
 
 //Muons with pT>10 GeV, |eta|<2.4 (defined in paper)
@@ -39,12 +40,9 @@ void Arran_2020_atlas_1403_5294::analyze() {
 
 
   // 1) If two electrons overlap within deltaR < 0.05, only the harder electron is stored (defined in paper, pg7)
-electronsLoose = overlapRemoval(electronsLoose, 0.05, "y");
 electronsTight = overlapRemoval(electronsTight, 0.05, "y");
 
-
   // 2) Removes all jets for which there exists any electron with deltaR < 0.2. (defined in paper, pg7)
-jets = overlapRemoval(jets, electronsLoose, 0.2, "y");
 jets = overlapRemoval(jets, electronsTight, 0.2, "y");
 
 //3) Remove taus if electron/muons within deltaR<0.2 (defined in paper, pg7)
@@ -53,14 +51,12 @@ jets = overlapRemoval(jets, electronsTight, 0.2, "y");
 //taujets = overlapRemoval(taujet, muonsCombined, 0.2, "y");
 
   //4) Removes all electrons for which there exists any jet with deltaR < 0.4 (defined in paper, pg7)
-electronsLoose = overlapRemoval(electronsLoose, jets, 0.4, "y");
 electronsTight = overlapRemoval(electronsTight, jets, 0.4, "y");
 
   //5) Removes all muons for which there exists any jet with deltaR < 0.4 (defined in paper, pg7)
 muonsCombined = overlapRemoval(muonsCombined, jets, 0.4, "y");   
 
   //6) Removes all electrons for which there exists any muon with deltaR < 0.01 (defined in paper, pg7)
-electronsLoose = overlapRemoval(electronsLoose, muonsCombined, 0.01, "y");  
 electronsTight = overlapRemoval(electronsTight, muonsCombined, 0.01, "y");   
 
   //7) Removes all muons for which there exists any electron with deltaR < 0.01 (defined in paper, pg7)
@@ -86,8 +82,6 @@ muonsCombined = overlapRemoval(muonsCombined, 0.05);
 
 //============================================================================================================================================================
 //============================================================================================================================================================
-
-  missingET->addMuons(muonsCombined);  // Adds muons to missing ET. This should almost always be done which is why this line is not commented out.
   
   std::vector<Electron*> electrons_base = electronsLoose;
   std::vector<Muon*> muons_base = muonsCombined;
@@ -120,7 +114,7 @@ muonsCombined = overlapRemoval(muonsCombined, 0.05);
 
 //if the total number of electrons and muons is not 2, remove  
   if ( (muons_base.size() + electrons_base.size()) != 2 ) return;
-//  countCutflowEvent("01_2_base_leptons"); 
+  countCutflowEvent("01_2_base_leptons"); 
 
 //Triggers, ee:97%, mumu:89%, emu:75% (defined in paper, pg 8)
   double triggerRatio = (double) rand() / (double) (RAND_MAX + 1.);
@@ -135,44 +129,52 @@ muonsCombined = overlapRemoval(muonsCombined, 0.05);
   if ( electrons_signal.size() == 1 && muons_signal.size() == 1 && triggerRatio > 0.75 ) return;
 
 //if the total number of signal electrons and muons is not 2, remove    
-  if ( (muons_signal.size() + electrons_signal.size()) != 2 ) return;  
 
 //If leading lepton pT is less than 35 GeV or second lepton pT is less than 20 GeV, remove
 //if ( muons_signal[0]->P4().Perp() < 35. or muons_signal[1]->P4().Perp() < 20. and electrons_signal[0]->P4().Perp() < 35. or electrons_signal[1]->P4().Perp() < 20. and muons_signal[0]->P4().Perp() < 35. or electrons_signal[1]->P4().Perp() < 20. and electrons_signal[0]->P4().Perp() < 35. or muons_signal[1]->P4().Perp() < 20.) return;
 
-  countCutflowEvent("01_2_signal_leptons"); 
-  
-
-
-
+  bool El = false; bool Mu = false; bool ElMu = false;
+  std::string flavour;
   std::vector<TLorentzVector> leptons;
   std::string tag;
-  bool sc = false;
+//  bool sc = false;
 
 
-
-//If, for two muons, the multiplied charge is -1, they are opposite charge
-  if ( muons_signal.size() == 2 ) {
-    leptons.push_back(muons_signal[0]->P4());
-    leptons.push_back(muons_signal[1]->P4());
-    tag = "M";
-    if (muons_signal[0]->Charge * muons_signal[1]->Charge < 0) sc = true; 
+//If the total electron + muon number is not 2, remove
+  if (electrons_signal.size() + muons_signal.size() != 2) return;
+//If the total electron number is 2, label E and add two leading electrons
+  if (electrons_signal.size() == 2) {
+    El = true;
+    flavour = "El";
+    leptons.push_back( electrons_signal[0]->P4() );
+    leptons.push_back( electrons_signal[1]->P4() );
+  }
+//If the total muon number is 2, label M and add two leading muons
+  else if (muons_signal.size() == 2) {
+    Mu = true;
+    flavour = "Mu";
+    leptons.push_back( muons_signal[0]->P4() );
+    leptons.push_back( muons_signal[1]->P4() );
+  }
+//If neither of these two cases, label EM and add leading muon and electron
+  else {
+    ElMu = true;
+    flavour = "ElMu";
+//If Electron is high pT than muon, add electron as leading
+    if ( electrons_signal[0]->PT > muons_signal[0]->PT ) {
+      leptons.push_back( electrons_signal[0]->P4() );
+      leptons.push_back( muons_signal[0]->P4() );
+    }
+//Otherwise add muon as leading
+    else {
+      leptons.push_back( muons_signal[0]->P4() );
+      leptons.push_back( electrons_signal[0]->P4() );
+    }
   }
 
-//If, for two electrons, the multiplied charge is -1, they are opposite charge
-  else if ( electrons_signal.size() == 2 ) {
-    leptons.push_back(electrons_signal[0]->P4());
-    leptons.push_back(electrons_signal[1]->P4());
-    tag = "E";
-    if (electrons_signal[0]->Charge * electrons_signal[1]->Charge < 0) sc = true; 
-  }  
-//Otherwise they're not same flavour, remove them
-  else return;
- 
-  countCutflowEvent("02_same_flav");
+  countCutflowEvent("02_2_signal_leptons"); 
 
-//If events do not fit the opposite charge tag, remove them 
-  if ( !sc ) return;  
+
 //  countCutflowEvent("05_opposite_charge");
   
 //If leading lepton pT is less than 35 GeV or second lepton pT is less than 20 GeV, remove
@@ -211,8 +213,10 @@ muonsCombined = overlapRemoval(muonsCombined, 0.05);
 //      }
  //   }
  //     }
-if (mll > 120. or (leptons[0] + leptons[1]).Perp() < 80. or missingET->P4().Et() < 80.) return;
-countSignalEvent("WWa_SF");
+if (mll < 120. and (leptons[0] + leptons[1]).Perp() > 80. and missingET->P4().Et() > 80.) {
+   if (El or Mu ) countSignalEvent("WWa_SF");
+   else countSignalEvent("WWa_DF");
+   }
 
 
 
@@ -227,8 +231,10 @@ countSignalEvent("WWa_SF");
 //        countSignalEvent("WWb_SF");
 //                       }
 //                                                }
-if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) < 90.  or  mll > 170. ) return;
-countSignalEvent("WWb_SF");
+if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90.  and  mll < 170. ) {
+    if (El or Mu ) countSignalEvent("WWb_SF");
+    else countSignalEvent("WWb_DF");
+    }
 
 //WWc
 //If mT2 is less than 100, remove these
@@ -237,25 +243,31 @@ countSignalEvent("WWb_SF");
 //       countSignalEvent("WWc_SF");
 
                                      
-if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) < 100. ) return;
-countSignalEvent("WWc_SF");
+if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
+   if (El or Mu ) countSignalEvent("WWc_SF");
+   else countSignalEvent("WWc_DF");
+   }
 
 //mT2_90
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) < 90. ) return;
-      countSignalEvent("SR_mT2_90_elel");
-
-//    if ( met_flag && mt2 > 110. ){ return;
-//      countSignalEvent("SR_mT2_110_elel");
-//}
+    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+      countCutflowEvent(flavour+"_mT2_90");
+      if (El or Mu ) countSignalEvent("mT2_90_SF");
+      else countSignalEvent("mT2_90_DF");
+    }
 
 //mt2_120
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) < 120. ) return;
-      countSignalEvent("SR_mT2_150_mumu");
+    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
+      countCutflowEvent(flavour+"_mT2_120");
+      if (El or Mu ) countSignalEvent("mT2_120_SF");
+      else countSignalEvent("mT2_120_DF");
+    }
  
 //mt2_150
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) < 150. ) return;
-      countSignalEvent("SR_mT2_150_mumu");
-
+    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
+      countCutflowEvent(flavour+"_mT2_150");
+      if (El or Mu ) countSignalEvent("mT2_150_SF");
+      else countSignalEvent("mT2_150_DF");
+   }
 
 //zjet
 //    if ( btag || forwardjet ) return;
@@ -280,7 +292,7 @@ countSignalEvent("WWc_SF");
 //    countSignalEvent("Zjets");
 //  }
 //  else return;
-    }
+  }
 
 void Arran_2020_atlas_1403_5294::finalize() {
 
