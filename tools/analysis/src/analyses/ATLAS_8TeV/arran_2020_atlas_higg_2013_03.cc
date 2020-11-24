@@ -15,17 +15,17 @@ void Arran_2020_atlas_higg_2013_03::initialize() {
 }
  // All std::vector members and etmiss have the common properties PT, Eta, Phi and P4() with the latter giving access to the full ROOT TLorentzVector.
 void Arran_2020_atlas_higg_2013_03::analyze() {
+
+  missingET->addMuons(muonsCombined);  // Adds muons to missing ET. This should almost always be done which is why this line is not commented out.
 //Signal electrons fit the 'tight' criteria (defined in paper)
 //Electrons with pT>7 GeV, |eta|<2.47 (defined in paper)
-  electronsLoose = filterPhaseSpace(electronsLoose, 7., -2.47, 2.47);
   electronsTight = filterPhaseSpace(electronsTight, 7., -2.47, 2.47);
 
 //Muons with pT>7 GeV, |eta|<2.5 (defined in paper)
-  muonsCombined = filterPhaseSpace(muonsCombined, 7., -2.4, 2.4);  
+  muonsCombined = filterPhaseSpace(muonsCombined, 7., -2.5, 2.5);  
 
-//Jets with pT>25 GeV, |eta|<2.5 (defined in paper)
-  jets = filterPhaseSpace(jets, 25., -2.5, 2.5); 
- 
+//Jets with pT>20 GeV, |eta|<4.5 (defined in paper)
+  jets = filterPhaseSpace(jets, 20., -4.5, 4.5); 
 
   tracks = filterPhaseSpace(tracks, 0.5, -2.5, 2.5);
 
@@ -42,15 +42,12 @@ void Arran_2020_atlas_higg_2013_03::analyze() {
 
 
   //1) Removes all electrons for which there exists any muon with deltaR < 0.2 (defined in paper, pg2)
-electronsLoose = overlapRemoval(electronsLoose, muonsCombined, 0.2, "y");  
 electronsTight = overlapRemoval(electronsTight, muonsCombined, 0.2, "y"); 
 
   // 2) Removes all jets for which there exists any electron with deltaR < 0.2. (defined in paper, pg2)
-jets = overlapRemoval(jets, electronsLoose, 0.2, "y");
 jets = overlapRemoval(jets, electronsTight, 0.2, "y");
 
   //3) Removes all electrons for which there exists any jet with deltaR < 0.4 (defined in paper, pg2)
-electronsLoose = overlapRemoval(electronsLoose, jets, 0.4, "y");
 electronsTight = overlapRemoval(electronsTight, jets, 0.4, "y");
 
   //4) Removes all muons for which there exists any jet with deltaR < 0.4 (defined in paper, pg2)
@@ -58,10 +55,8 @@ muonsCombined = overlapRemoval(muonsCombined, jets, 0.4, "y");
 
 //============================================================================================================================================================
 //============================================================================================================================================================
-
-  missingET->addMuons(muonsCombined);  // Adds muons to missing ET. This should almost always be done which is why this line is not commented out.
   
-  std::vector<Electron*> electrons_base = electronsLoose;
+  std::vector<Electron*> electrons_base = electronsTight;
   std::vector<Muon*> muons_base = muonsCombined;
     
 //Isolation requirements are applied to signal electrons:
@@ -84,7 +79,6 @@ muonsCombined = overlapRemoval(muonsCombined, jets, 0.4, "y");
 //  countCutflowEvent("00_all"); 
 
   double met = missingET->P4().Et();
-
 
 //if the total number of electrons and muons is not 2, remove  
   if ( (muons_base.size() + electrons_base.size()) != 2 ) return;
@@ -109,43 +103,48 @@ muonsCombined = overlapRemoval(muonsCombined, jets, 0.4, "y");
 //  countCutflowEvent("01_2_signal_leptons"); 
   
 
+  bool El = false; bool Mu = false; bool ElMu = false;
+  std::string flavour;
   std::vector<TLorentzVector> leptons;
   std::string tag;
-  bool sc = false;
+//  bool sc = false;
 
-
-//If, for two muons, the multiplied charge is -1, they are opposite charge
-  if ( muons_signal.size() == 2 ) {
-    leptons.push_back(muons_signal[0]->P4());
-    leptons.push_back(muons_signal[1]->P4());
-    tag = "M";
-    if (muons_signal[0]->Charge * muons_signal[1]->Charge < 0) sc = true; 
+//If the total electron + muon number is not 2, remove
+  if (electrons_signal.size() + muons_signal.size() != 2) return;
+//If the total electron number is 2, label E and add two leading electrons
+  if (electrons_signal.size() == 2) {
+    El = true;
+    flavour = "El";
+    leptons.push_back( electrons_signal[0]->P4() );
+    leptons.push_back( electrons_signal[1]->P4() );
+  }
+//If the total muon number is 2, label M and add two leading muons
+  else if (muons_signal.size() == 2) {
+    Mu = true;
+    flavour = "Mu";
+    leptons.push_back( muons_signal[0]->P4() );
+    leptons.push_back( muons_signal[1]->P4() );
+  }
+//If neither of these two cases, label EM and add leading muon and electron
+  else {
+    ElMu = true;
+    flavour = "ElMu";
+//If Electron is high pT than muon, add electron as leading
+    if ( electrons_signal[0]->PT > muons_signal[0]->PT ) {
+      leptons.push_back( electrons_signal[0]->P4() );
+      leptons.push_back( muons_signal[0]->P4() );
+    }
+//Otherwise add muon as leading
+    else {
+      leptons.push_back( muons_signal[0]->P4() );
+      leptons.push_back( electrons_signal[0]->P4() );
+    }
   }
 
-//If, for two electrons, the multiplied charge is -1, they are opposite charge
-  else if ( electrons_signal.size() == 2 ) {
-    leptons.push_back(electrons_signal[0]->P4());
-    leptons.push_back(electrons_signal[1]->P4());
-    tag = "E";
-    if (electrons_signal[0]->Charge * electrons_signal[1]->Charge < 0) sc = true; 
-  }  
-
-  else if ( electrons_signal.size() == 1 && muons_signal.size() == 1 ) {
-    leptons.push_back(electrons_signal[0]->P4());
-    leptons.push_back(muons_signal[0]->P4());
-    tag = "EMu";
-    if (electrons_signal[0]->Charge * muons_signal[0]->Charge < 0) sc = true; 
-  }  
-//Otherwise, remove them
-  else return;
- 
-//  countCutflowEvent("02_same_flav");
-
-//If events do not fit the opposite charge tag, remove them 
-  if ( !sc ) return;  
+  countCutflowEvent("02_2_signal_leptons"); 
 //  countCutflowEvent("05_opposite_charge");
   
-//If leading lepton pT is less than 20 GeV, remove (pg2)
+//If lepton pT is less than 20 GeV, remove (pg2)
   if ( leptons[0].Perp() < 20. or leptons[1].Perp() < 20.) return;  
   countCutflowEvent("01_2OS_lep1_pt>20");
 ////////////////////////////////////////////////////////////////////////
@@ -264,4 +263,4 @@ if ( met < 90) return;
 
 void Arran_2020_atlas_higg_2013_03::finalize() {
   // Whatever should be done after the run goes here
-}       
+}      
