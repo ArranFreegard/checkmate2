@@ -27,10 +27,6 @@ void Arran_2020_atlas_1403_5294::analyze() {
 //Jets with pT>20 GeV, |eta|<4.5 (defined in paper)
   jets = filterPhaseSpace(jets, 20., -4.5, 4.5); 
 
-  std::vector<Jet*> bjets;
-  std::vector<Jet*> lightjets;
-  std::vector<Jet*> forwardjets;
-
 ///OVERLAP REMOVALS///
   electronsTight = overlapRemoval(electronsTight, 0.05, "y");
   jets = overlapRemoval(jets, electronsTight, 0.2, "y");
@@ -43,16 +39,18 @@ void Arran_2020_atlas_1403_5294::analyze() {
 
 ///JETS///
 //bjets with |eta|<2.4, or light jet with |eta|<2.4
+  std::vector<TLorentzVector> bjets;
+  std::vector<TLorentzVector> forwardjets;
+  std::vector<TLorentzVector> lightjets;
   for (int i = 0; i < jets.size(); i++) {
     if ( (fabs(jets[i]->Eta) < 2.4) && (jets[i]->PT > 20.) ){
-      if (checkBTag(jets[i]) ) bjets.push_back(jets[i]);
+      if (checkBTag(jets[i]) ) bjets.push_back(jets[i]->P4() );
       else {
-        lightjets.push_back(jets[i]);
-        }
+        lightjets.push_back(jets[i]->P4() );
       }
-    else if (jets[i]->PT > 30. )  forwardjets.push_back(jets[i]);
     }
-
+    else if (jets[i]->PT > 30. ) forwardjets.push_back(jets[i]->P4() );  
+  }
 ///ISOLATION REQUIREMENTS///
   std::vector<Electron*> electrons_base = electronsTight;
   std::vector<Muon*> muons_base = muonsCombined;
@@ -106,10 +104,42 @@ void Arran_2020_atlas_1403_5294::analyze() {
     }
   }
   
+//////////////////////////////////////////////////////////////
+  double deltaphi_min = 1000.;
+  double deltaphi_temp = 10000.;
+  double missingETrel;
+  
+  for ( int i = 0; i < jets.size(); i++ ) {
+    if ( (fabs(jets[i]->Eta) < 2.4) &&  (jets[i]->PT > 20.) ) {
+      deltaphi_temp = fabs( jets[i]->P4().DeltaPhi(missingET->P4()));
+      if ( deltaphi_temp < deltaphi_min )
+        deltaphi_min = deltaphi_temp;
+    }
+  }
+  for ( int i = 0; i < muons_signal.size(); i++ ) {
+    deltaphi_temp = fabs( muons_signal[i]->P4().DeltaPhi(missingET->P4()));
+    if ( deltaphi_temp < deltaphi_min )
+      deltaphi_min = deltaphi_temp;
+  }
+  for ( int i = 0; i < electrons_signal.size(); i++ ) {
+    deltaphi_temp = fabs( electrons_signal[i]->P4().DeltaPhi(missingET->P4()));
+    if ( deltaphi_temp < deltaphi_min )
+      deltaphi_min = deltaphi_temp;
+  }
+  if ( deltaphi_min < 1.57079632679 )
+    missingETrel = missingET->P4().Et()*sin(deltaphi_min);
+  else
+    missingETrel = missingET->P4().Et();
+/////////////////////////////////////////////////////////////
+
   TLorentzVector pll = leptons[0] + leptons[1];
   double mll = pll.M();
 
   if ( leptons[0].Perp() < 35. || leptons[1].Perp() < 20. ) return;
+
+  if ( ee ) weight *= 0.97;
+  else if ( mumu )  weight *= 0.89;
+  else weight *= 0.75;
 
   countCutflowEvent("02_2_OS_leptons"); 
 
@@ -123,185 +153,200 @@ void Arran_2020_atlas_1403_5294::analyze() {
 //////////////
   if ( ee ) {
     countCutflowEvent("05_ee_leptons");
-    if (jets.size() != 0 ) return;
-    countCutflowEvent("06_ee_jet_veto");
-    if (fabs( mll-91.118 ) < 10. ) return;  
-    countCutflowEvent("07_ee_Z_veto");
+    if (jets.size() < 1)  
+    {
+      countCutflowEvent("06_ee_jet_veto");
+      if (fabs( mll-91.118 ) < 10. ) return;  
+      countCutflowEvent("07_ee_Z_veto");
 //Wwa
-    if ((leptons[0] + leptons[1]).Perp() > 80.) {
-      countCutflowEvent("08_ee_WWa_pTll>80_GeV");
-      if (missingET->P4().Et() > 80.)
-        countCutflowEvent("09_ee_WWa_METrel>80_GeV");
-        if (mll < 120.)
-          countCutflowEvent("10_ee_WWa_mll<120_GeV");
-          countSignalEvent("WWa_SF");
-    }
+      if ((leptons[0] + leptons[1]).Perp() > 80.) {
+        countCutflowEvent("08_ee_WWa_pTll>80_GeV");
+        if ( missingETrel > 80.) {
+          countCutflowEvent("09_ee_WWa_METrel>80_GeV");
+          if (mll < 120.) {
+            countCutflowEvent("10_ee_WWa_mll<120_GeV");
+            countSignalEvent("WWa_SF");
+          }
+        }
+      }
 
 //Wwb
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
-      countCutflowEvent("08_ee_WWb_mT2>90_GeV");
-      if (mll < 170.)
-      countCutflowEvent("09_ee_WWb_mll<170_GeV");
-      countSignalEvent("WWb_SF");
-    }
+      if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+        countCutflowEvent("08_ee_WWb_mT2>90_GeV");
+        if (mll < 170.) {
+          countCutflowEvent("09_ee_WWb_mll<170_GeV");
+          countSignalEvent("WWb_SF");
+        }
+      }
 //Wwc
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
-      countCutflowEvent("08_ee_WWc_mT2>100_GeV");
-      countSignalEvent("WWc_SF");
-    }
+      if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
+        countCutflowEvent("08_ee_WWc_mT2>100_GeV");
+        countSignalEvent("WWc_SF");
+      }
 
 //mT2_90
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
-      countCutflowEvent("08_ee_mT2>90_GeV");
-      countSignalEvent("mT2_90_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+        countCutflowEvent("08_ee_mT2>90_GeV");
+        countSignalEvent("mT2_90_SF");
+      }
 
 //mT2_120
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
-      countCutflowEvent("08_ee_mT2>120_GeV");
-      countSignalEvent("mT2_120_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
+        countCutflowEvent("08_ee_mT2>120_GeV");
+        countSignalEvent("mT2_120_SF");
+      }
 //mT2_150
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
-      countCutflowEvent("08_ee_mT2>150_GeV");
-      countSignalEvent("mT2_150_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
+        countCutflowEvent("08_ee_mT2>150_GeV");
+        countSignalEvent("mT2_150_SF");
+      }
 //Zjets
-
-    if ( lightjets.size() > 1 ) {
+    }
+    else if ( lightjets.size() > 1 ) {
       countCutflowEvent("07_ee_Zjets_>=2_central_light_jets");
-    if ( bjets.size() != 0 || forwardjets.size() != 0 ) return;
-      countCutflowEvent("08_ee_Zjets_b_&_forward_jet_veto");
-    if ( fabs(mll - 91.2) > 10. ) return;
-    countCutflowEvent("09_ee_Zjets_Z_window");
-    if ( pll.Perp() < 80. ) return;
-    countCutflowEvent("10_ee_Zjets_pTll>80_GeV");
-    if ( missingET->P4().Et() < 80. ) return;
-    countCutflowEvent("11_ee_Zjets_MET_rel>80_GeV");
-    if ( leptons[0].DeltaR(leptons[1]) < 0.3 || leptons[0].DeltaR(leptons[1]) > 1.5 ) return;
-    countCutflowEvent("12_ee_Zjets_0.3<dRll<1.5");
-    double mjj = (lightjets[0]->P4() + lightjets[1]->P4()).M();
-    if ( mjj < 50. || mjj > 100. ) return;
-    countCutflowEvent("13_ee_Zjets_50<mjj<100");
-    if ( lightjets[1]->P4().Perp() < 45. ) return;
-    countCutflowEvent("14_ee_Zjets_pTjj>45");
-    countSignalEvent("Zjets");
+      if ( bjets.size() != 0 || forwardjets.size() != 0 ) return;
+        countCutflowEvent("08_ee_Zjets_b_&_forward_jet_veto");
+      if ( fabs(mll - 91.2) > 10. ) return;
+        countCutflowEvent("09_ee_Zjets_Z_window");
+      if ( pll.Perp() < 80. ) return;
+        countCutflowEvent("10_ee_Zjets_pTll>80_GeV");
+      if ( missingETrel < 80. ) return;
+        countCutflowEvent("11_ee_Zjets_MET_rel>80_GeV");
+      if ( leptons[0].DeltaR(leptons[1]) < 0.3 || leptons[0].DeltaR(leptons[1]) > 1.5 ) return;
+        countCutflowEvent("12_ee_Zjets_0.3<dRll<1.5");
+      double mjj = (lightjets[0] + lightjets[1]).M();
+      if ( mjj < 50. || mjj > 100. ) return;
+        countCutflowEvent("13_ee_Zjets_50<mjj<100");
+      if ( lightjets[1].Perp() < 45. ) return;
+        countCutflowEvent("14_ee_Zjets_pTjj>45");
+        countSignalEvent("Zjets");
     }
   }
 
 //mumu-channel//
 ////////////////
-  else if ( mumu ) {
+  if ( mumu ) {
     countCutflowEvent("05_mumu_leptons");
-    if (jets.size() != 0 ) return;
-    countCutflowEvent("06_mumu_jet_veto");
-    if (fabs( mll-91.118 ) < 10. ) return;  
-    countCutflowEvent("07_mumu_Z_veto");
+    if (jets.size() < 1 ) 
+    { 
+      countCutflowEvent("06_mumu_jet_veto");
+      if (fabs( mll-91.118 ) < 10. ) return;  
+        countCutflowEvent("07_mumu_Z_veto");
 //Wwa
-    if ((leptons[0] + leptons[1]).Perp() > 80.) {
-      countCutflowEvent("08_mumu_WWa_pTll>80_GeV");
-      if (missingET->P4().Et() > 80.)
-        countCutflowEvent("09_mumu_WWa_METrel>80_GeV");
-        if (mll < 120.)
+      if ((leptons[0] + leptons[1]).Perp() > 80.) {
+        countCutflowEvent("08_mumu_WWa_pTll>80_GeV");
+        if ( missingETrel > 80.) {
+          countCutflowEvent("09_mumu_WWa_METrel>80_GeV");
+          if (mll < 120.) {
           countCutflowEvent("10_mumu_WWa_mll<120_GeV");
           countSignalEvent("WWa_SF");
-    }
+          }
+        }
+      }
 
 //Wwb
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
-      countCutflowEvent("08_mumu_WWb_mT2>90_GeV");
-      if (mll < 170.)
-      countCutflowEvent("09_mumu_WWb_mll<170_GeV");
-      countSignalEvent("WWb_SF");
-    }
+      if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+        countCutflowEvent("08_mumu_WWb_mT2>90_GeV");
+        if (mll < 170.)  {
+          countCutflowEvent("09_mumu_WWb_mll<170_GeV");
+          countSignalEvent("WWb_SF");
+        }
+      }
 //Wwc
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
-      countCutflowEvent("08_mumu_WWc_mT2>100_GeV");
-      countSignalEvent("WWc_SF");
-    }
+      if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
+        countCutflowEvent("08_mumu_WWc_mT2>100_GeV");
+        countSignalEvent("WWc_SF");
+      }
 
 //mT2_90
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
-      countCutflowEvent("08_mumu_mT2>90_GeV");
-      countSignalEvent("mT2_90_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+        countCutflowEvent("08_mumu_mT2>90_GeV");
+        countSignalEvent("mT2_90_SF");
+      }
 
 //mT2_120
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
-      countCutflowEvent("08_mumu_mT2>120_GeV");
-      countSignalEvent("mT2_120_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
+        countCutflowEvent("08_mumu_mT2>120_GeV");
+        countSignalEvent("mT2_120_SF");
+      }
 //mT2_150
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
-      countCutflowEvent("08_mumu_mT2>150_GeV");
-      countSignalEvent("mT2_150_SF");
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
+        countCutflowEvent("08_mumu_mT2>150_GeV");
+        countSignalEvent("mT2_150_SF");
+      }
     }
 //Zjets
-    if ( lightjets.size() > 1 ) {
+    else if ( lightjets.size() > 1 ) 
+    {
       countCutflowEvent("07_mumu_Zjets_>=2_central_light_jets");
-    if ( bjets.size() != 0 || forwardjets.size() != 0 ) return;
-      countCutflowEvent("08_mumu_Zjets_b_&_forward_jet_veto");
-    if ( fabs(mll - 91.2) > 10. ) return;
-    countCutflowEvent("09_mumu_Zjets_Z_window");
-    if ( pll.Perp() < 80. ) return;
-    countCutflowEvent("10_mumu_Zjets_pTll>80_GeV");
-    if ( missingET->P4().Et() < 80. ) return;
-    countCutflowEvent("11_mumu_Zjets_MET_rel>80_GeV");
-    if ( leptons[0].DeltaR(leptons[1]) < 0.3 || leptons[0].DeltaR(leptons[1]) > 1.5 ) return;
-    countCutflowEvent("12_mumu_Zjets_0.3<dRll<1.5");
-    double mjj = (lightjets[0]->P4() + lightjets[1]->P4()).M();
-    if ( mjj < 50. || mjj > 100. ) return;
-    countCutflowEvent("13_mumu_Zjets_50<mjj<100");
-    if ( lightjets[1]->P4().Perp() < 45. ) return;
-    countCutflowEvent("14_mumu_Zjets_pTjj>45");
-    countSignalEvent("Zjets");
+      if ( bjets.size() != 0 || forwardjets.size() != 0 ) return;
+        countCutflowEvent("08_mumu_Zjets_b_&_forward_jet_veto");
+      if ( fabs(mll - 91.2) > 10. ) return;
+        countCutflowEvent("09_mumu_Zjets_Z_window");
+      if ( pll.Perp() < 80. ) return;
+        countCutflowEvent("10_mumu_Zjets_pTll>80_GeV");
+      if ( missingETrel < 80. ) return;
+        countCutflowEvent("11_mumu_Zjets_MET_rel>80_GeV");
+      if ( leptons[0].DeltaR(leptons[1]) < 0.3 || leptons[0].DeltaR(leptons[1]) > 1.5 ) return;
+        countCutflowEvent("12_mumu_Zjets_0.3<dRll<1.5");
+      double mjj = (lightjets[0] + lightjets[1]).M();
+      if ( mjj < 50. || mjj > 100. ) return;
+        countCutflowEvent("13_mumu_Zjets_50<mjj<100");
+      if ( lightjets[1].Perp() < 45. ) return;
+        countCutflowEvent("14_mumu_Zjets_pTjj>45");
+        countSignalEvent("Zjets");
     }
   }
-
+ 
 //emu-channel//
 ///////////////
-  else {
+  if ( emu ) {
     countCutflowEvent("05_emu_leptons");
-    if (jets.size() != 0 ) return;
-    countCutflowEvent("06_emu_jet_veto");
+    if (jets.size() < 1 ) 
+    {
+      countCutflowEvent("06_emu_jet_veto");
 //Wwa
-    if ((leptons[0] + leptons[1]).Perp() > 80.) {
-      countCutflowEvent("08_emu_WWa_pTll>80_GeV");
-      if (missingET->P4().Et() > 80.)
-        countCutflowEvent("09_emu_WWa_METrel>80_GeV");
-        if (mll < 120.)
-          countCutflowEvent("10_emu_WWa_mll<120_GeV");
-          countSignalEvent("WWa_SF");
-    }
+      if ((leptons[0] + leptons[1]).Perp() > 80.) {
+        countCutflowEvent("08_emu_WWa_pTll>80_GeV");
+        if ( missingETrel > 80.) {
+          countCutflowEvent("09_emu_WWa_METrel>80_GeV");
+          if (mll < 120.) {
+            countCutflowEvent("10_emu_WWa_mll<120_GeV");
+            countSignalEvent("WWa_SF");
+          }
+        }
+      }
 
 //Wwb
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
-      countCutflowEvent("08_emu_WWb_mT2>90_GeV");
-      if (mll < 170.)
-      countCutflowEvent("09_emu_WWb_mll<170_GeV");
-      countSignalEvent("WWb_SF");
-    }
+      if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+        countCutflowEvent("08_emu_WWb_mT2>90_GeV");
+        if (mll < 170.) {
+          countCutflowEvent("09_emu_WWb_mll<170_GeV");
+          countSignalEvent("WWb_SF");
+        }
+      }
 //Wwc
-    if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
-      countCutflowEvent("08_emu_WWc_mT2>100_GeV");
-      countSignalEvent("WWc_SF");
-    }
+      if ( mT2( leptons[0], leptons[1], 0., missingET->P4()) > 100. ) {
+        countCutflowEvent("08_emu_WWc_mT2>100_GeV");
+        countSignalEvent("WWc_SF");
+      }
 
 //mT2_90
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
-      countCutflowEvent("08_emu_mT2>90_GeV");
-      countSignalEvent("mT2_90_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 90. ) {
+        countCutflowEvent("08_emu_mT2>90_GeV");
+        countSignalEvent("mT2_90_SF");
+      }
 
 //mT2_120
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
-      countCutflowEvent("08_emu_mT2>120_GeV");
-      countSignalEvent("mT2_120_SF");
-    }
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 120. ) {
+        countCutflowEvent("08_emu_mT2>120_GeV");
+        countSignalEvent("mT2_120_SF");
+      }
 //mT2_150
-    if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
-      countCutflowEvent("08_emu_mT2>150_GeV");
-      countSignalEvent("mT2_150_SF");
+      if (mT2( leptons[0], leptons[1], 0., missingET->P4()) > 150. ) {
+        countCutflowEvent("08_emu_mT2>150_GeV");
+        countSignalEvent("mT2_150_SF");
+      }
     }
   }
 }
