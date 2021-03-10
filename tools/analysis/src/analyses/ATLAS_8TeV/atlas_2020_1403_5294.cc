@@ -1,8 +1,8 @@
-#include "arran_2020_atlas_1403_5294.h"
+#include "atlas_2020_1403_5294.h"
 // AUTHOR: Arran Freegard
 //  EMAIL: acf1g14@soton.ac.uk
-void Arran_2020_atlas_1403_5294::initialize() {
-  setAnalysisName("arran_2020_atlas_1403_5294");          
+void Atlas_2020_1403_5294::initialize() {
+  setAnalysisName("atlas_2020_1403_5294");          
   setInformation(""
     "# direct production of charginos, neutralinos and sleptons\n"
     "# two leptons and missing transverse momentum\n"
@@ -13,7 +13,7 @@ void Arran_2020_atlas_1403_5294::initialize() {
 
 }
 
-void Arran_2020_atlas_1403_5294::analyze() {
+void Atlas_2020_1403_5294::analyze() {
 
   missingET->addMuons(muonsCombined);  // Adds muons to missing ET. This should almost always be done which is why this line is not commented out.
 
@@ -32,10 +32,6 @@ void Arran_2020_atlas_1403_5294::analyze() {
   jets = overlapRemoval(jets, electronsTight, 0.2, "y");
   electronsTight = overlapRemoval(electronsTight, jets, 0.4, "y");
   muonsCombined = overlapRemoval(muonsCombined, jets, 0.4, "y");   
-
-//muonsCombined = overlapRemoval(muonsCombined, electronsTight, 0.01, "y"); 
-//muonsCombined = overlapRemoval(muonsCombined, 0.05, "y");
-
 
 ///JETS///
 //bjets with |eta|<2.4, or light jet with |eta|<2.4
@@ -351,6 +347,6 @@ void Arran_2020_atlas_1403_5294::analyze() {
   }
 }
 
-void Arran_2020_atlas_1403_5294::finalize() {
+void Atlas_2020_1403_5294::finalize() {
 
 } 
