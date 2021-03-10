@@ -1,5 +1,5 @@
 {
-  "analysis": "arran_2020_atlas_higg_2013_03", 
+  "analysis": "atlas_higg_2013_03", 
   "author": "Arran Freegard", 
   "authoremail": "acf1g14@soton.ac.uk", 
   "cr": "n", 
