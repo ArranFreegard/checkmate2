@@ -1,8 +1,8 @@
-#include "atlas_2020_1403_5294.h"
+#include "atlas_1403_5294_v2.h"
 // AUTHOR: Arran Freegard
 //  EMAIL: acf1g14@soton.ac.uk
-void Atlas_2020_1403_5294::initialize() {
-  setAnalysisName("atlas_2020_1403_5294");          
+void Atlas_1403_5294_v2::initialize() {
+  setAnalysisName("atlas_1403_5294_v2");          
   setInformation(""
     "# direct production of charginos, neutralinos and sleptons\n"
     "# two leptons and missing transverse momentum\n"
@@ -13,7 +13,7 @@ void Atlas_2020_1403_5294::initialize() {
 
 }
 
-void Atlas_2020_1403_5294::analyze() {
+void Atlas_1403_5294_v2::analyze() {
 
   missingET->addMuons(muonsCombined);  // Adds muons to missing ET. This should almost always be done which is why this line is not commented out.
 
@@ -347,6 +347,6 @@ void Atlas_2020_1403_5294::analyze() {
   }
 }
 
-void Atlas_2020_1403_5294::finalize() {
+void Atlas_1403_5294_v2::finalize() {
 
 } 
