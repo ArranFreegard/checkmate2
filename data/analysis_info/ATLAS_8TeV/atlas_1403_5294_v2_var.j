@@ -1,5 +1,5 @@
 {
-  "analysis": "arran_2020_atlas_1403_5294", 
+  "analysis": "atlas_1403_5294_v2", 
   "author": "Arran Freegard", 
   "authoremail": "acf1g14@soton.ac.uk", 
   "cr": "n", 
